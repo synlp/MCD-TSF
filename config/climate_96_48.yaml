@@ -2,24 +2,24 @@
 #type: args
 
 train:
-  epochs: 30
-  batch_size: 8
-  lr: 5.0e-4
+  epochs: 200
+  batch_size: 24
+  lr: 1.0e-2
   itr_per_epoch: 1.0e+8
 
 diffusion:
-  layers: 4
-  channels: 256
+  layers: 6
+  channels: 64
   nheads: 8
   diffusion_embedding_dim: 256
   beta_start: 0.0001
-  beta_end: 0.8
-  num_steps: 250
+  beta_end: 0.5
+  num_steps: 200
   schedule: "quad"
   is_linear: False
   noise_esti: False
   cfg: True
-  c_mask_prob: 0.65
+  c_mask_prob: 0.05
   ddim: True
   sample_steps: 50
   sample_method: "quad"
