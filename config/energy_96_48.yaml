@@ -1,0 +1,40 @@
+
+#type: args
+
+train:
+  epochs: 150
+  batch_size: 16
+  lr: 1.0e-2
+  itr_per_epoch: 1.0e+8
+
+diffusion:
+  layers: 6
+  channels: 64
+  nheads: 8
+  diffusion_embedding_dim: 128
+  beta_start: 0.0001
+  beta_end: 0.5
+  num_steps: 250
+  schedule: "quad"
+  is_linear: False
+  noise_esti: False
+  cfg: True
+  c_mask_prob: 0.05
+  ddim: True
+  sample_steps: 75
+  sample_method: "quad"
+  pre_norm: False
+
+model:
+  is_unconditional: 0
+  timeemb: 128
+  featureemb: 16
+  target_strategy: "test"
+  num_sample_features: 64
+  timestep_branch: False
+  timestep_emb_cat: True
+  with_texts: True
+  relative_size_emb_cat: False
+  decomp: False
+  llm: "bert"
+  llm_layers: 0
