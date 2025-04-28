@@ -59,18 +59,18 @@ class DiffusionEmbedding(nn.Module):
         self.projection2 = nn.Linear(projection_dim, projection_dim)
 
     def forward(self, diffusion_step):
-        x = self.embedding[diffusion_step] # (B, diffusion_embedding_dim)
-        x = self.projection1(x) # (B, diffusion_embedding_dim)
+        x = self.embedding[diffusion_step]
+        x = self.projection1(x) 
         x = F.silu(x)
-        x = self.projection2(x) # (B, diffusion_embedding_dim)
+        x = self.projection2(x) 
         x = F.silu(x)
         return x
 
     def _build_embedding(self, num_steps, dim=64):
-        steps = torch.arange(num_steps).unsqueeze(1)  # (T,1)
-        frequencies = 10.0 ** (torch.arange(dim) / (dim - 1) * 4.0).unsqueeze(0)  # (1,dim)
-        table = steps * frequencies  # (T,dim)
-        table = torch.cat([torch.sin(table), torch.cos(table)], dim=1)  # (T,dim*2)
+        steps = torch.arange(num_steps).unsqueeze(1) 
+        frequencies = 10.0 ** (torch.arange(dim) / (dim - 1) * 4.0).unsqueeze(0) 
+        table = steps * frequencies 
+        table = torch.cat([torch.sin(table), torch.cos(table)], dim=1)  
         return table
 
 
@@ -94,7 +94,6 @@ class ResidualBlock(nn.Module):
             self.feature_layer = get_custom_tv_trans(heads=nheads, layers=1, channels=channels)
         if with_text:
             self.channel_proj = nn.Linear(context_dim, channels)
-            # self.len_proj = nn.Linear(768, pred_len) ########################
             self.cross_modal_layer = get_cross_trans(heads=nheads, layers=1, channels=channels, dropout=dropout, pre_norm=pre_norm)
 
     # fusing information along L
@@ -165,56 +164,41 @@ class ResidualBlock(nn.Module):
         base_shape = x.shape
         x = x.reshape(B, channel, K * L)
 
-        diffusion_emb = self.diffusion_projection(diffusion_emb).unsqueeze(-1)  # (B, channel, 1)
-        y = x + diffusion_emb # (B, channel, K*L)
+        diffusion_emb = self.diffusion_projection(diffusion_emb).unsqueeze(-1) 
+        y = x + diffusion_emb 
 
-        # 先融合时间戳再融合文本
         if self.is_linear:
-            y = self.forward_time(y, base_shape) # (B, channel, K*L)
+            y = self.forward_time(y, base_shape) 
         elif timesteps_emb is not None:
             timesteps_emb, y, atten_series_timestamp = self.forward_time_TV(timesteps_emb, y, base_shape)
         else:
-            y = self.forward_time(y, base_shape) # (B, channel, K*L)
-        y = self.forward_feature(y, base_shape)  # (B, channel, K*L)
+            y = self.forward_time(y, base_shape) 
+        y = self.forward_feature(y, base_shape) 
         
         if self.with_text and context is not None:
-            context = self.channel_proj(context.permute(0,2,1)).permute(0,2,1) # (B, channel, context_L)
-            y, attn_series_text = self.cross_modal_layer(y, context) # (B, channel, K*L)
-            # y, attn_series_text = self.cross_modal_layer(context, y) # (B, channel, K*L)
-
-        # 先融合文本再融合时间戳
-        # if self.with_text and context is not None:
-        #     context = self.channel_proj(context.permute(0,2,1)).permute(0,2,1) # (B, channel, context_L)
-        #     y, _ = self.cross_modal_layer(y, context) # (B, channel, K*L)
-        # if self.is_linear:
-        #     y = self.forward_time(y, base_shape) # (B, channel, K*L)
-        # elif timesteps_emb is not None:
-        #     timesteps_emb, y = self.forward_time_TV(timesteps_emb, y, base_shape)
-        # else:
-        #     y = self.forward_time(y, base_shape) # (B, channel, K*L)
-        # y = self.forward_feature(y, base_shape)  # (B, channel, K*L)
+            context = self.channel_proj(context.permute(0,2,1)).permute(0,2,1) 
+            y, attn_series_text = self.cross_modal_layer(y, context) 
 
         y = self.attn_drop(y)
 
-        y = self.mid_projection(y)  # (B, 2*channel, K*L)
+        y = self.mid_projection(y)
         y = self.dropout(y)
 
         _, cond_dim, _, _ = cond_info.shape
         cond_info = cond_info.reshape(B, cond_dim, K * L)
-        cond_info = self.cond_projection(cond_info) # (B, 2*channel, K*L)
-        y = y + cond_info # (B, 2*channel, K*L)
+        cond_info = self.cond_projection(cond_info)
+        y = y + cond_info 
 
-        gate, filter = torch.chunk(y, 2, dim=1) # (B, channels, K*L) * 2
-        y = torch.sigmoid(gate) * torch.tanh(filter)  # (B, channel, K*L)
-        y = self.output_projection(y) # (B, 2*channel, K*L)
+        gate, filter = torch.chunk(y, 2, dim=1)
+        y = torch.sigmoid(gate) * torch.tanh(filter)  
+        y = self.output_projection(y) 
         y = self.dropout(y)
 
-        residual, skip = torch.chunk(y, 2, dim=1) # (B, channels, K*L) * 2
-        x = x.reshape(base_shape) # (B, channels, K, L)
-        residual = residual.reshape(base_shape) # (B, channels, K, L)
-        skip = skip.reshape(base_shape) # (B, channels, K, L)
-        return (x + residual) / math.sqrt(2.0), skip, timesteps_emb, atten_series_timestamp, attn_series_text # (B, channels, K, L), (B, channels, K, L), ...
-
+        residual, skip = torch.chunk(y, 2, dim=1) 
+        x = x.reshape(base_shape) 
+        residual = residual.reshape(base_shape) 
+        skip = skip.reshape(base_shape) 
+        return (x + residual) / math.sqrt(2.0), skip, timesteps_emb, atten_series_timestamp, attn_series_text 
 
 class diff_CSDI(nn.Module):
     def __init__(self, config, inputdim=2, mode_num=0):
@@ -235,8 +219,6 @@ class diff_CSDI(nn.Module):
         self.save_attn = config["save_attn"]
 
         self.input_projection = Conv1d_with_init(inputdim, self.channels, 1)
-        # if mode_num > 1:
-        #     self.fusion_projection = Conv1d_with_init(self.channels * mode_num, self.channels, 1)
         self.output_projection1 = Conv1d_with_init(self.channels, self.channels, 1)
         self.output_projection2 = Conv1d_with_init(self.channels, 1, 1)
         nn.init.zeros_(self.output_projection2.weight)
@@ -273,115 +255,44 @@ class diff_CSDI(nn.Module):
             ]
         )
 
-    # def forward(self, x, cond_info, diffusion_step, cfg_mask, timestep_emb=None, size_emb=None, context=None):
-    #     B, inputdim, K, L = x.shape
-    #     obs = x[:, 0, :, :self.lookback_len]
-    #     # cond_info: (B, side_info_dim, K, L)
-    #     # timestep_emb: (B, diff_dim//4, K, L)
-    #     # if cfg_mask is not None:
-    #     #     cond_info_mask = cfg_mask[:, None, None, None].repeat(1, cond_info.shape[1], K, L)
-    #         # cond_info = cond_info * cond_info_mask
-    #     x = x.reshape(B, inputdim, K * L)
-    #     x = self.input_projection(x) # (B, channels, K * L)
-    #     x = self.dropout(x)
-    #     x = F.relu(x)
-    #     if timestep_emb is not None:
-    #         timestep_emb = timestep_emb.reshape(B, -1, K*L)
-    #         # if cfg_mask is not None:
-    #         #     timestep_emb_mask = cfg_mask[:, None, None].repeat(1, timestep_emb.shape[1], timestep_emb.shape[2])
-    #         #     timestep_emb = timestep_emb * timestep_emb_mask
-    #         # x = torch.cat([x, timestep_emb], dim=1)
-    #     if size_emb is not None:
-    #         size_emb = size_emb.reshape(B, -1, K*L)
-    #         x = torch.cat([x,  size_emb], dim=1)
-    #     if context is not None and cfg_mask is not None:
-    #         cfg_mask = cfg_mask[:, None, None].repeat(1, context.shape[1], context.shape[2])
-    #         context = context * cfg_mask
-    #     # if self.mode_num > 1:
-    #     #     x = self.fusion_projection(x)
-    #     x = x.reshape(B, self.channels, K, L) # (B, channels, K, L)
-
-    #     diffusion_emb = self.diffusion_embedding(diffusion_step) # (B, diffusion_embedding_dim)
-
-    #     skip = []
-    #     timestep_emb_ls = []
-    #     for layer in self.residual_layers: # 注意每一层残差连接层都要重复输入cond_info和diffusion_emb！
-    #         x, skip_connection, timestep_emb = layer(x, cond_info, diffusion_emb, timestep_emb, context) # (B, channels, K, L), (B, channels, K, L)
-    #         skip.append(skip_connection)
-    #         timestep_emb_ls.append(timestep_emb)
-
-    #     x = torch.sum(torch.stack(skip), dim=0) / math.sqrt(len(self.residual_layers)) # (B, channels, K, L)
-    #     x = x.reshape(B, self.channels, K * L) # (B,channel,K*L)
-    #     x = self.output_projection1(x) # (B, channel, K*L)
-    #     x = self.dropout(x)
-    #     x = F.relu(x)
-    #     x = self.output_projection2(x) # (B, 1, K*L)
-    #     x = x.reshape(B, K, L)
-
-    #     if timestep_emb is not None:
-    #         timestep_pred = torch.sum(torch.stack(timestep_emb_ls), dim=0) / math.sqrt(len(self.residual_layers)) # (B, channels//4, K, L)
-    #         timestep_pred = timestep_pred.reshape(B, self.channels//4, K * L)
-    #         timestep_pred = self.timestep_projection1(timestep_pred)
-    #         timestep_pred = F.relu(timestep_pred)
-    #         timestep_pred = self.timestep_projection2(timestep_pred)
-    #         timestep_pred = timestep_pred.reshape(B, K, L)
-
-    #         error = timestep_pred[:, :, :self.lookback_len] - obs
-    #         conb_w = self.weight_mlp(error).unsqueeze(2) # (B, K, 1, 2)
-    #         x = torch.stack([x, timestep_pred], dim=-1) # (B, K, L, 2)
-    #         x = torch.sum(x * conb_w, dim=-1) # (B, K, L)
-
-    #     return x # (B, K, L)
-
     def forward(self, x, cond_info, diffusion_step, cfg_mask, timestep_emb=None, size_emb=None, context=None):
         B, inputdim, K, L = x.shape
         obs = x[:, 0, :, :self.lookback_len]
-        # cond_info: (B, side_info_dim, K, L)
-        # timestep_emb: (B, diff_dim//4, K, L)
-        # if cfg_mask is not None:
-        #     cond_info_mask = cfg_mask[:, None, None, None].repeat(1, cond_info.shape[1], K, L)
-            # cond_info = cond_info * cond_info_mask
         x = x.reshape(B, inputdim, K * L)
-        x = self.input_projection(x) # (B, channels, K * L)
+        x = self.input_projection(x) 
         x = self.dropout(x)
         x = F.relu(x)
         if timestep_emb is not None:
             timestep_emb = timestep_emb.reshape(B, -1, K*L)
-            # if cfg_mask is not None:
-            #     timestep_emb_mask = cfg_mask[:, None, None].repeat(1, timestep_emb.shape[1], timestep_emb.shape[2])
-            #     timestep_emb = timestep_emb * timestep_emb_mask
-            # x = torch.cat([x, timestep_emb], dim=1)
         if size_emb is not None:
             size_emb = size_emb.reshape(B, -1, K*L)
             x = torch.cat([x,  size_emb], dim=1)
         if context is not None and cfg_mask is not None:
             cfg_mask = cfg_mask[:, None, None].repeat(1, context.shape[1], context.shape[2])
             context = context * cfg_mask
-        # if self.mode_num > 1:
-        #     x = self.fusion_projection(x)
-        x = x.reshape(B, self.channels, K, L) # (B, channels, K, L)
+        x = x.reshape(B, self.channels, K, L)
 
-        diffusion_emb = self.diffusion_embedding(diffusion_step) # (B, diffusion_embedding_dim)
+        diffusion_emb = self.diffusion_embedding(diffusion_step) 
 
         skip = []
         timestep_emb_ls = []
         attn = []
-        for layer in self.residual_layers: # 注意每一层残差连接层都要重复输入cond_info和diffusion_emb！
-            x, skip_connection, timestep_emb, attn_time, attn_text = layer(x, cond_info, diffusion_emb, timestep_emb, context) # (B, channels, K, L), (B, channels, K, L)
+        for layer in self.residual_layers: 
+            x, skip_connection, timestep_emb, attn_time, attn_text = layer(x, cond_info, diffusion_emb, timestep_emb, context) 
             skip.append(skip_connection)
             timestep_emb_ls.append(timestep_emb)
             attn.append((attn_time, attn_text))
 
-        x = torch.sum(torch.stack(skip), dim=0) / math.sqrt(len(self.residual_layers)) # (B, channels, K, L)
-        x = x.reshape(B, self.channels, K * L) # (B,channel,K*L)
-        x = self.output_projection1(x) # (B, channel, K*L)
+        x = torch.sum(torch.stack(skip), dim=0) / math.sqrt(len(self.residual_layers))
+        x = x.reshape(B, self.channels, K * L) 
+        x = self.output_projection1(x)
         x = self.dropout(x)
         x = F.relu(x)
-        x = self.output_projection2(x) # (B, 1, K*L)
+        x = self.output_projection2(x)
         x = x.reshape(B, K, L)
 
         if timestep_emb is not None:
-            timestep_pred = torch.sum(torch.stack(timestep_emb_ls), dim=0) / math.sqrt(len(self.residual_layers)) # (B, channels//4, K, L)
+            timestep_pred = torch.sum(torch.stack(timestep_emb_ls), dim=0) / math.sqrt(len(self.residual_layers)) 
             timestep_pred = timestep_pred.reshape(B, self.channels//4, K * L)
             timestep_pred = self.timestep_projection1(timestep_pred)
             timestep_pred = F.relu(timestep_pred)
@@ -389,11 +300,10 @@ class diff_CSDI(nn.Module):
             timestep_pred = timestep_pred.reshape(B, K, L)
 
             error = timestep_pred[:, :, :self.lookback_len] - obs
-            conb_w = self.weight_mlp(error).unsqueeze(2) # (B, K, 1, 2)
-            # x = timestep_pred * self.time_weight + x * (1 - self.time_weight)
-            x = torch.stack([x, timestep_pred], dim=-1) # (B, K, L, 2)
-            x = torch.sum(x * conb_w, dim=-1) # (B, K, L)
+            conb_w = self.weight_mlp(error).unsqueeze(2) 
+            x = torch.stack([x, timestep_pred], dim=-1) 
+            x = torch.sum(x * conb_w, dim=-1) 
         if self.save_attn:
-            return x, attn # (B, K, L), ...
+            return x, attn 
         else:
             return x

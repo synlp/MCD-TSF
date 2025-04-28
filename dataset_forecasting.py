@@ -18,8 +18,6 @@ class Forecasting_Dataset(Dataset):
         self.seq_length = self.history_length + self.pred_length
             
         paths=datafolder+'/data.pkl' 
-        #shape: (T x N)
-        #mask_data is usually filled by 1
         with open(paths, 'rb') as f:
             self.main_data, self.mask_data = pickle.load(f)
         paths=datafolder+'/meanstd.pkl'

@@ -64,23 +64,11 @@ class Dataset_Custom(Dataset):
         df_report = df_report.dropna(axis='index', how='any', subset=['fact'])
         df_search = df_search.dropna(axis='index', how='any', subset=['fact'])
 
-        '''
-        df_num.columns: ['date', 'start_data', 'end_data', ...(other features), target feature]
-        df_report.columns: ['start_data', 'end_data', 'fact', 'preds']
-        df_search.columns: ['start_data', 'end_data', 'fact', 'preds']
-        '''
         df_num['date'], df_num['start_date'], df_num['end_date'] = pd.to_datetime(df_num['date']), pd.to_datetime(df_num['start_date']), pd.to_datetime(df_num['end_date'])
         df_report['start_date'], df_report['end_date'] = pd.to_datetime(df_report['start_date']), pd.to_datetime(df_report['end_date'])
-        # df_search['start_date'], df_search['end_date'] = pd.to_datetime(df_search['start_date']), pd.to_datetime(df_search['end_date'])
 
         df_num = df_num.sort_values('date', ascending=True).reset_index(drop=True)
         df_report = df_report.sort_values('start_date', ascending=True).reset_index(drop=True)
-        # df_search = df_search.sort_values('end_date', ascending=True).reset_index(drop=True)
-
-        # if self.data_prefix == 'Security/Security':
-        #     num_train = int(len(df_num) * 0.6)
-        #     num_test = int(len(df_num) * 0.2)
-        # else:
         num_train = int(len(df_num) * 0.7)
         num_test = int(len(df_num) * 0.2)
         num_vali = len(df_num) - num_train - num_test
@@ -93,7 +81,7 @@ class Dataset_Custom(Dataset):
         first_start_date = df_num.start_date[border1]
         final_end_date = df_num.end_date[border2-1]
 
-        df_data = df_num[[self.target]] # Univariate TSF in ours setting.
+        df_data = df_num[[self.target]]
 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
@@ -110,7 +98,7 @@ class Dataset_Custom(Dataset):
             df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
             df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
             df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
-            data_stamp = df_stamp.drop(['date'], 1).values # drop the 'end_data' column.
+            data_stamp = df_stamp.drop(['date'], 1).values
         elif self.timeenc == 1:
             data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
             data_stamp = data_stamp.transpose(1, 0)
@@ -122,16 +110,10 @@ class Dataset_Custom(Dataset):
         self.data_stamp = data_stamp
         self.num_dates = df_num[['start_date', 'end_date']][border1:border2].reset_index(drop=True)
         self.txt_report = df_report[['start_date', 'end_date', 'fact']].loc[(df_report.end_date >= first_start_date) & (df_report.end_date <= final_end_date)]
-        # self.txt_search = df_search[['start_date', 'end_date', 'fact']].loc[(df_search.end_date >= first_start_date) & (df_search.end_date <= final_end_date)]
-        print('')
 
     def collect_text(self, start_date, end_date):
         report = self.txt_report.loc[(self.txt_report.end_date >= start_date) & (self.txt_report.end_date <= end_date)]
-        # report = report.sort_values('start_date', ascending=False).reset_index(drop=True)
-        # search = self.txt_search.loc[(self.txt_search.end_date >= start_date) & (self.txt_search.end_date <= end_date)]
         def add_datemark(row):
-            # if not isinstance(row['fact'], str):
-            #     print(row['fact'])
             return row['start_date'].strftime("%Y-%m-%d") + " to " + row['end_date'].strftime("%Y-%m-%d") + ": " + row['fact']
         if not report.empty:
             report = report.apply(add_datemark, axis=1).to_list()
@@ -160,7 +142,6 @@ class Dataset_Custom(Dataset):
         text_end = s_end
 
         seq_x_txt, txt_mark = self.collect_text(self.num_dates.start_date[text_begin], self.num_dates.end_date[text_end])
-        # seq_y_txt = self.collect_text(self.num_dates.start_date[s_end], self.num_dates.end_date[r_end])
 
         observed_data = np.concatenate([seq_x, seq_y], axis=0)
         timesteps = np.concatenate([seq_x_stamp, seq_y_stamp], axis=0)
@@ -180,22 +161,9 @@ class Dataset_Custom(Dataset):
 
         return s
 
-        # return seq_x, seq_y, seq_x_stamp, seq_y_stamp, seq_x_txt #, seq_y_txt
-
     def __len__(self):
         return len(self.data_x) - self.seq_len - self.pred_len + 1
 
-    def inverse_transform(self, data):
-        return self.scaler.inverse_transform(data)
-    
-    def inverse_transform_tensor(self, tensor):
-        if self.scaler is None:
-            return tensor
-        else:
-            if self.scaler_type == 'minmax':
-                return (tensor + 1) / 2 * (self.scaler.data_max_[0] - self.scaler.data_min_[0]) + self.scaler.data_min_[0]
-            else:
-                return (tensor * self.scaler.scale_[0]) + self.scaler.mean_[0]
 
 class Dataset_ETT_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None,

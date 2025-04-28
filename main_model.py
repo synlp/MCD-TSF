@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from diff_models import diff_CSDI
-from TimeSter import TimeSter
 from utils.prepare4llm import get_llm
 
 class moving_avg(nn.Module):
@@ -15,7 +14,6 @@ class moving_avg(nn.Module):
         self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=0)
 
     def forward(self, x):
-        # padding on the both ends of time series
         front = x[:, 0:1, :].repeat(1, (self.kernel_size - 1) // 2, 1)
         end = x[:, -1:, :].repeat(1, (self.kernel_size - 1) // 2, 1)
         x = torch.cat([front, x, end], dim=1)
@@ -32,7 +30,6 @@ class series_decomp(nn.Module):
         self.moving_avg = moving_avg(kernel_size, stride=1)
 
     def forward(self, x):
-        # x: [Batch, Seq length, Channel]
         moving_mean = self.moving_avg(x)
         res = x - moving_mean
         return res, moving_mean
@@ -45,7 +42,6 @@ class CSDI_series_decomp(nn.Module):
         self.pred_len = pred_len
 
     def forward(self, x):
-        # x: [Batch, Channel, Seq length]
         x = x.permute(0, 2, 1)
         lookback = x[:, :self.lookback_len, :]
 
@@ -93,29 +89,17 @@ class CSDI_base(nn.Module):
         self.save_attn = config["model"]["save_attn"]
         self.save_token = config["model"]["save_token"]
 
-        self.emb_total_dim = self.emb_time_dim + self.emb_feature_dim# + config["model"]["context_dim"]
+        self.emb_total_dim = self.emb_time_dim + self.emb_feature_dim
         if self.is_unconditional == False:
-            self.emb_total_dim += 1  # for conditional mask
+            self.emb_total_dim += 1 
         self.embed_layer = nn.Embedding(
             num_embeddings=self.target_dim, embedding_dim=self.emb_feature_dim
         )
-        if self.timestep_branch:
-            self.timestep_pred = TimeSter(time_dim=config["model"]["timestep_dim"],
-                                          n_variate=self.target_dim, n_out=self.target_dim,
-                                          seq_len=window_lens[0], pred_len=window_lens[1],
-                                          rda=1, rdb=1, ksize=5)
             
         if self.decomp:
             self.decomposition = CSDI_series_decomp(self.lookback_len, self.pred_len, kernel_size=25)
         
         if self.timestep_emb_cat:
-            # self.timestep_emb = nn.Sequential(nn.Linear(config["model"]["timestep_dim"], 16), 
-            #                           nn.LayerNorm(16),
-            #                           nn.ReLU(),
-            #                           nn.Linear(16, 16), 
-            #                           nn.LayerNorm(16),
-            #                           nn.ReLU(),
-            #                           nn.Linear(16, 1))
             self.timestep_emb = nn.Sequential(nn.Linear(config["model"]["timestep_dim"], self.diff_channels//8), 
                                       nn.LayerNorm(self.diff_channels//8),
                                       nn.ReLU(),
@@ -155,13 +139,7 @@ class CSDI_base(nn.Module):
         config_diff["save_attn"] = config["model"]["save_attn"]
 
         input_dim = 1 if self.is_unconditional == True else 2
-        # if self.timestep_emb_cat:
-        #     input_dim = input_dim + 1
         mode_num = 1
-        # if self.timestep_emb_cat:
-        #     mode_num += 1
-        # if self.relative_size_emb_cat:
-        #     mode_num += 1
 
         if self.decomp:
             self.diffmodel_trend = diff_CSDI(config_diff, input_dim, mode_num=mode_num)
@@ -169,7 +147,6 @@ class CSDI_base(nn.Module):
         else:
             self.diffmodel = diff_CSDI(config_diff, input_dim, mode_num=mode_num)
 
-        # parameters for diffusion models
         self.num_steps = config_diff["num_steps"]
         if config_diff["schedule"] == "quad":
             self.beta = np.linspace(
@@ -216,7 +193,7 @@ class CSDI_base(nn.Module):
             mask_choice = np.random.rand()
             if self.target_strategy == "mix" and mask_choice > 0.5:
                 cond_mask[i] = rand_mask[i]
-            else:  # draw another sample for histmask (i-1 corresponds to another sample)
+            else: 
                 cond_mask[i] = cond_mask[i] * for_pattern_mask[i - 1] 
         return cond_mask
 
@@ -227,18 +204,18 @@ class CSDI_base(nn.Module):
     def get_side_info(self, observed_tp, cond_mask):
         B, K, L = cond_mask.shape
 
-        time_embed = self.time_embedding(observed_tp, self.emb_time_dim)  # (B,L,emb)
+        time_embed = self.time_embedding(observed_tp, self.emb_time_dim) 
         time_embed = time_embed.unsqueeze(2).expand(-1, -1, K, -1)
         feature_embed = self.embed_layer(
             torch.arange(self.target_dim).to(self.device)
         )  # (K, emb)
         feature_embed = feature_embed.unsqueeze(0).unsqueeze(0).expand(B, L, -1, -1)
 
-        side_info = torch.cat([time_embed, feature_embed], dim=-1)  # (B,L,K,*)
-        side_info = side_info.permute(0, 3, 2, 1)  # (B,*,K,L)
+        side_info = torch.cat([time_embed, feature_embed], dim=-1) 
+        side_info = side_info.permute(0, 3, 2, 1) 
 
         if self.is_unconditional == False:
-            side_mask = cond_mask.unsqueeze(1)  # (B,1,K,L)
+            side_mask = cond_mask.unsqueeze(1) 
             side_info = torch.cat([side_info, side_mask], dim=1)
 
         return side_info
@@ -247,7 +224,7 @@ class CSDI_base(nn.Module):
         self, observed_data, cond_mask, observed_mask, side_info, is_train, timesteps=None, timestep_emb=None, size_emb=None, context=None
     ):
         loss_sum = 0
-        for t in range(self.num_steps):  # calculate loss for all t
+        for t in range(self.num_steps): 
             loss = self.calc_loss(
                 observed_data, cond_mask, observed_mask, side_info, is_train, set_t=t, timesteps=timesteps, timestep_emb=timestep_emb, size_emb=size_emb, context=context
             )
@@ -264,60 +241,59 @@ class CSDI_base(nn.Module):
             stdev = torch.sqrt(torch.sum((observed_data - means) ** 2 * cond_mask, dim=2, keepdim=True) / (torch.sum(cond_mask, dim=2, keepdim=True) - 1) + 1e-5)
             observed_data = (observed_data - means) / stdev
 
-        if is_train != 1:  # for validation
+        if is_train != 1:
             t = (torch.ones(B) * set_t).long().to(self.device)
         else:
-            t = torch.randint(0, self.num_steps, [B]).to(self.device) # (B, )
-        current_alpha = self.alpha_torch[t]  # (B, 1, 1)
-        noise = torch.randn_like(observed_data) # (B, K, L)
-        noisy_data = (current_alpha ** 0.5) * observed_data + (1.0 - current_alpha) ** 0.5 * noise #  # (B, K, L)
+            t = torch.randint(0, self.num_steps, [B]).to(self.device) 
+        current_alpha = self.alpha_torch[t]  
+        noise = torch.randn_like(observed_data)
+        noisy_data = (current_alpha ** 0.5) * observed_data + (1.0 - current_alpha) ** 0.5 * noise
 
-        total_input = self.set_input_to_diffmodel(noisy_data, observed_data, cond_mask) # (B, 2, K, L)
+        total_input = self.set_input_to_diffmodel(noisy_data, observed_data, cond_mask) 
 
         if self.cfg:
-            cfg_mask = torch.bernoulli(torch.ones((B, )) - self.c_mask_prob).to(self.device) # (B, )
+            cfg_mask = torch.bernoulli(torch.ones((B, )) - self.c_mask_prob).to(self.device) 
         else:
             cfg_mask = None
 
         if self.decomp:
             predicted_seasonal, _ = self.diffmodel_sesonal(total_input[0], side_info, t, cfg_mask, timestep_emb, size_emb)
             predicted_trend = self.diffmodel_trend(total_input[1], side_info, t, cfg_mask, timestep_emb, size_emb)
-            predicted, _ = predicted_seasonal + predicted_trend # (B, K, L)
+            predicted, _ = predicted_seasonal + predicted_trend
         else:
             if self.save_attn:
-                predicted, _ = self.diffmodel(total_input, side_info, t, cfg_mask, timestep_emb, size_emb, context) # (B, K, L)
+                predicted, _ = self.diffmodel(total_input, side_info, t, cfg_mask, timestep_emb, size_emb, context) 
             else:
-                predicted = self.diffmodel(total_input, side_info, t, cfg_mask, timestep_emb, size_emb, context) # (B, K, L)
+                predicted = self.diffmodel(total_input, side_info, t, cfg_mask, timestep_emb, size_emb, context) 
 
         if self.timestep_branch and timesteps is not None:
             predicted_from_timestep = self.timestep_pred(timesteps)
             predicted = 0.9 * predicted + 0.1 * predicted_from_timestep
 
-        target_mask = observed_mask - cond_mask # (B, K, L)
+        target_mask = observed_mask - cond_mask
         if self.noise_esti:
-            residual = (noise - predicted) * target_mask # noise prediction
+            residual = (noise - predicted) * target_mask 
         else:
-            residual = (observed_data - predicted) * target_mask # data prediction
+            residual = (observed_data - predicted) * target_mask 
         num_eval = target_mask.sum()
         loss = (residual ** 2).sum() / (num_eval if num_eval > 0 else 1)
         return loss
 
     def set_input_to_diffmodel(self, noisy_data, observed_data, cond_mask):
         if self.is_unconditional == True:
-            total_input = noisy_data.unsqueeze(1)  # (B,1,K,L)
+            total_input = noisy_data.unsqueeze(1)  
         else:
-            cond_obs = cond_mask * observed_data # (B, K, L)
-            # noisy_target = ((1 - cond_mask) * noisy_data) # (B,K,L)
-            noisy_target = noisy_data.unsqueeze(1) # (B,1,K,L)
+            cond_obs = cond_mask * observed_data
+            noisy_target = noisy_data.unsqueeze(1) 
             if self.decomp:
-                res, moving_mean = self.decomposition(cond_obs) # (B, K, L), (B, K, L)
-                res, moving_mean = res.unsqueeze(1), moving_mean.unsqueeze(1) # (B, 1, K, L), (B, 1, K, L)
-                res_input = torch.cat([res, noisy_target], dim=1)  # (B,2,K,L)
-                moving_mean_input = torch.cat([moving_mean, noisy_target], dim=1)  # (B,2,K,L)
+                res, moving_mean = self.decomposition(cond_obs) 
+                res, moving_mean = res.unsqueeze(1), moving_mean.unsqueeze(1) 
+                res_input = torch.cat([res, noisy_target], dim=1)  
+                moving_mean_input = torch.cat([moving_mean, noisy_target], dim=1) 
                 total_input = [res_input, moving_mean_input]
             else:
-                cond_obs = cond_obs.unsqueeze(1) # (B,1,K,L)
-                total_input = torch.cat([cond_obs, noisy_target], dim=1)  # (B,2,K,L)
+                cond_obs = cond_obs.unsqueeze(1) 
+                total_input = torch.cat([cond_obs, noisy_target], dim=1) 
 
         return total_input
 
@@ -347,13 +323,12 @@ class CSDI_base(nn.Module):
                 timestep_emb = timestep_emb.repeat(2, 1, 1, 1)
             if context is not None:
                 context = context.repeat(2, 1, 1)
-            cfg_mask = torch.zeros((2*B, )).to(self.device) # (2*B, )
+            cfg_mask = torch.zeros((2*B, )).to(self.device) 
             cfg_mask[:B] = 1.
         else:
             cfg_mask = None
 
         for i in range(n_samples):
-            # generate noisy observation for unconditional model
             if self.is_unconditional == True:
                 noisy_obs = observed_data
                 noisy_cond_history = []
@@ -366,10 +341,9 @@ class CSDI_base(nn.Module):
             for t in range(self.sample_steps - 1, -1, -1):
                 if self.is_unconditional == True:
                     diff_input = cond_mask * noisy_cond_history[t] + (1.0 - cond_mask) * current_sample
-                    diff_input = diff_input.unsqueeze(1)  # (B,1,K,L)
-                else:
+                    diff_input = diff_input.unsqueeze(1)  
                     if self.decomp:
-                        cond_obs = cond_mask * observed_data # (B, K, L)
+                        cond_obs = cond_mask * observed_data
                         noisy_target = ((1 - cond_mask) * current_sample).unsqueeze(1) # (B, 1, K, L)
                         res, moving_mean = self.decomposition(cond_obs) # (B, K, L), (B, K, L)
                         res, moving_mean = res.unsqueeze(1), moving_mean.unsqueeze(1) # (B, 1, K, L), (B, 1, K, L)
@@ -393,7 +367,6 @@ class CSDI_base(nn.Module):
                             predicted = self.diffmodel(diff_input, side_info, torch.tensor([t]).to(self.device), cfg_mask, timestep_emb, size_emb, context) # (2*B, K, L)
                 if self.cfg:
                     predicted_cond, predicted_uncond = predicted[:B], predicted[B:]
-                    # predicted = (1 + guide_w) * predicted_cond - guide_w * predicted_uncond
                     predicted = predicted_uncond + guide_w * (predicted_cond - predicted_uncond)
 
                 if self.noise_esti:
@@ -444,7 +417,7 @@ class CSDI_base(nn.Module):
             if not self.noise_esti:
                 imputed_samples[:, i] = imputed_samples[:, i] * stdev + means
         if self.save_attn:
-            return imputed_samples, attn # (B, n_samples, K, L)
+            return imputed_samples, attn 
         else:
             return imputed_samples
 
@@ -490,7 +463,7 @@ class CSDI_base(nn.Module):
 
             samples = self.impute(observed_data, cond_mask, side_info, n_samples)
 
-            for i in range(len(cut_length)):  # to avoid double evaluation
+            for i in range(len(cut_length)): 
                 target_mask[i, ..., 0 : cut_length[i].item()] = 0
         return samples, observed_data, target_mask, observed_mask, observed_tp
 
@@ -511,7 +484,6 @@ class CSDI_Forecasting(CSDI_base):
         if self.timestep_emb_cat or self.timestep_branch:
             timesteps = batch["timesteps"].to(self.device).float()
             timesteps = timesteps.permute(0, 2, 1)
-            # timesteps = torch.zeros_like(timesteps).to(self.device).float()
         else:
             timesteps = None
         texts = batch["texts"] if self.with_texts else None
@@ -526,19 +498,19 @@ class CSDI_Forecasting(CSDI_base):
         feature_id=torch.arange(self.target_dim_base).unsqueeze(0).expand(observed_data.shape[0],-1).to(self.device)
 
         return (
-            observed_data, # (B, K, L)
-            observed_mask, # (B, K, L) all ones in forecasting task
-            observed_tp, # (B, L) timepoint indices from 0 to L-1
-            gt_mask, # (B, K, L) 11111111111000
-            for_pattern_mask, # (B, K, L) equals to observed_mask in forecasting
-            cut_length, # (B, ) cut number of each sample (all zeros in forecasting task)
-            feature_id, # (B, K) feature indices from 0 to K-1
-            timesteps, # (B, timesteps_dim, L)
-            texts, # [B, ] list of texts.
-            text_mask, # (B, )
+            observed_data, 
+            observed_mask,
+            observed_tp, 
+            gt_mask,
+            for_pattern_mask, 
+            cut_length,
+            feature_id,
+            timesteps, 
+            texts,
+            text_mask, 
         )        
 
-    def sample_features(self,observed_data, observed_mask,feature_id,gt_mask): # randomly choose some features from all features.
+    def sample_features(self,observed_data, observed_mask,feature_id,gt_mask):
         size = self.num_sample_features
         self.target_dim = size
         extracted_data = []
@@ -566,16 +538,12 @@ class CSDI_Forecasting(CSDI_base):
     
     def get_relative_size_info(self, observed_data):
         B, K, L = observed_data.shape
-        # size_emb = observed_data[:, :, :self.lookback_len].clone().unsqueeze(2).expand(-1, -1, L, -1) - \
-        #     observed_data.clone().unsqueeze(3).expand(-1, -1, -1, self.lookback_len) # (B, K, L, lookback_len)
-        # size_emb = self.relative_size_emb(size_emb) # (B, K, L, diff_channels)
-        # size_emb = size_emb.permute(0, 3, 1, 2) # (B, diff_channels, K, L)
 
         size_emb = observed_data[:, :, :self.lookback_len].clone().unsqueeze(3).expand(-1, -1, -1, self.lookback_len) - \
-            observed_data[:, :, :self.lookback_len].clone().unsqueeze(2).expand(-1, -1, self.lookback_len, -1) # (B, K, lookback_len, lookback_len)
-        size_emb = self.relative_size_emb(size_emb) # (B, K, lookback_len, diff_channels)
-        size_emb = size_emb.permute(0, 3, 1, 2) # (B, diff_channels, K, lookback_len)
-        size_emb = torch.cat([size_emb, torch.zeros((B, self.diff_channels, K, self.pred_len)).to(observed_data.device)], dim=-1) # (B, diff_channels, K, L)
+            observed_data[:, :, :self.lookback_len].clone().unsqueeze(2).expand(-1, -1, self.lookback_len, -1) 
+        size_emb = self.relative_size_emb(size_emb)
+        size_emb = size_emb.permute(0, 3, 1, 2)
+        size_emb = torch.cat([size_emb, torch.zeros((B, self.diff_channels, K, self.pred_len)).to(observed_data.device)], dim=-1) 
         return size_emb
     
     def get_text_info(self, text, text_mask):
@@ -605,28 +573,15 @@ class CSDI_Forecasting(CSDI_base):
             )  # (K, emb)
             feature_embed = feature_embed.unsqueeze(0).unsqueeze(0).expand(B, L, -1, -1) # (B, L, K, feature_emb)
         else: # if features have been sampled from all features
-            feature_embed = self.embed_layer(feature_id).unsqueeze(1).expand(-1,L,-1,-1) # 仅编码选择的部分特征索引
-
-        # if self.with_texts:
-        #     text_input = self.tokenizer(
-        #         texts,
-        #         padding=True,
-        #         truncation=True,
-        #         return_tensors="pt"
-        #     ).to(observed_tp.device)
-        #     context = self.text_encoder(**text_input).last_hidden_state.mean(dim=1) # (B, context_dim)
-        #     context = context.unsqueeze(2).expand(-1,-1,L) # (B, context_dim, L)
+            feature_embed = self.embed_layer(feature_id).unsqueeze(1).expand(-1,L,-1,-1) 
 
         side_info = torch.cat([time_embed, feature_embed], dim=-1)  # (B,L,K,time_emb+feature_emb)
-        side_info = side_info.permute(0, 3, 2, 1) # (B, time_emb+feature_emb, K, L)
+        side_info = side_info.permute(0, 3, 2, 1) 
 
         if self.is_unconditional == False:
             side_mask = cond_mask.unsqueeze(1)  # (B,1,K,L)
-            side_info = torch.cat([side_info, side_mask], dim=1) # (B, time_emb+feature_emb+1, K, L)
-        
-        # if self.with_texts:
-        #     context = context.unsqueeze(2).expand(-1, -1, K, -1) # (B, context_dim, K, L)
-        #     side_info = torch.cat([side_info, context], dim=1) # (B, time_emb+feature_emb+1+timesteps_dim+context_dim, K, L)
+            side_info = torch.cat([side_info, side_mask], dim=1) 
+    
 
         return side_info
 
@@ -651,7 +606,6 @@ class CSDI_Forecasting(CSDI_base):
             self.target_dim = self.target_dim_base
             feature_id = None
 
-        # In forecasting task, cond_mask always equals to gt_mask.
         if is_train == 0:
             cond_mask = gt_mask
         else: #test pattern
@@ -659,7 +613,6 @@ class CSDI_Forecasting(CSDI_base):
                 observed_mask, gt_mask
             )
 
-        # fuse timepoints, features, cond_mask information to one side_info.
         side_info = self.get_side_info(observed_tp, cond_mask, feature_id, timesteps, texts) # (B, side_info_dim, K, L)
 
         if self.timestep_emb_cat:
