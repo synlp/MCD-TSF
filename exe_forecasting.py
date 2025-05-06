@@ -140,7 +140,7 @@ else:
 model.target_dim = target_dim
 if config["diffusion"]["cfg"]:
     best_mse = 10e10
-    for guide_w in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]:
+    for guide_w in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 4.0, 5.0]:
         mse = evaluate(
             model,
             test_loader,
