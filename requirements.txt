@@ -1,7 +1,10 @@
-torch
-pandas
-numpy
-tqdm
-pyyaml
-matplotlib
-linear_attention_transformer
+linear_attention_transformer==0.19.1
+matplotlib==3.10.3
+numpy==2.2.6
+pandas==2.2.3
+PyYAML==6.0.2
+scikit_learn==1.6.1
+seaborn==0.13.2
+torch==2.6.0
+tqdm==4.67.1
+transformers==4.51.3

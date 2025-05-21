@@ -2,8 +2,6 @@ import numpy as np
 import torch
 from torch.optim import Adam, AdamW
 from tqdm import tqdm
-import pickle
-from utils.visual import visual_samples
 import os
 import json
 
@@ -122,8 +120,6 @@ def calc_quantile_CRPS_sum(target, forecast, eval_points, mean_scaler, scaler):
 
 def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldername="", window_lens=[1, 1], guide_w=0, save_attn=False, save_token=False):
     model.load_state_dict(torch.load(foldername + "/model.pth"))
-    visual_save_path = os.path.join(foldername, str(guide_w))
-    os.makedirs(visual_save_path, exist_ok=True)
     with torch.no_grad():
         model.eval()
         mse_total = 0
@@ -156,10 +152,6 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
                 eval_points = eval_points.permute(0, 2, 1)
                 observed_points = observed_points.permute(0, 2, 1)
 
-                if len(samples) > 1:
-                    visual_samples(visual_save_path, samples, c_target, idx=batch_no,
-                                   plot_num=6, window_lens=window_lens, show_quantiles=True)
-
                 samples_median = samples.median(dim=1)
                 all_target.append(c_target)
                 all_evalpoint.append(eval_points)
@@ -168,7 +160,7 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
                 all_generated_samples.append(samples)
                 if save_attn:
                     f = lambda x: x.detach().mean(dim=1).unsqueeze(1)
-                    attns = [(f(attn1), f(attn2)) for attn1, attn2 in attns] # layers[(time_attn, text_attn), ()]
+                    attns = [(f(attn1), f(attn2)) for attn1, attn2 in attns] 
                     tt_attns, tf_attns = zip(*attns)
                     tt_attns = torch.cat(tt_attns, 1)
                     tf_attns = torch.cat(tf_attns, 1)
@@ -207,9 +199,6 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
                     refresh=True,
                 )
 
-            # with open(
-            #     foldername + "/generated_outputs_nsample" + str(nsample) + "_guide" + str(guide_w) + ".pk", "wb"
-            # ) as f:
             all_target = torch.cat(all_target, dim=0)
             all_evalpoint = torch.cat(all_evalpoint, dim=0)
             all_observed_point = torch.cat(all_observed_point, dim=0)
@@ -220,19 +209,6 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
                 all_tf_attns = torch.cat(all_tf_attns, dim=0)
 
 
-            #     pickle.dump(
-            #         [
-            #             all_generated_samples,
-            #             all_target,
-            #             all_evalpoint,
-            #             all_observed_point,
-            #             all_observed_time,
-            #             scaler,
-            #             mean_scaler,
-            #         ],
-            #         f,
-            #     )
-
             np.save(foldername + "/generated_nsample" + str(nsample) + "_guide" + str(guide_w) + ".npy", all_generated_samples.cpu().numpy())
             np.save(foldername + "/target_" + str(nsample) + "_guide" + str(guide_w) + ".npy", all_target.cpu().numpy())
             if save_attn:
@@ -241,50 +217,15 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
             if save_token:
                 np.save(foldername + "/tokens" + ".npy", np.asarray(all_tokens))
 
-
-            # CRPS = calc_quantile_CRPS(
-            #     all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
-            # )
-            # CRPS_sum = calc_quantile_CRPS_sum(
-            #     all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
-            # )
-            # NCRPS = calc_quantile_CRPS(
-            #     all_target, all_generated_samples, all_evalpoint, 0, 1
-            # )
-            # NCRPS_sum = calc_quantile_CRPS_sum(
-            #     all_target, all_generated_samples, all_evalpoint, 0, 1
-            # )
-
             results = {
                 "guide_w": guide_w,
                 "MSE": nmse_total / evalpoints_total,
                 "MAE": nmae_total / evalpoints_total,
-                # "CRPS": NCRPS
             }
             with open(foldername + "config_results.json", "a") as f:
                 json.dump(results, f, indent=4)
-            # with open(
-            #     foldername + "/result_nsample" + str(nsample) + ".txt", "w"
-            # ) as f:
-            #     pickle.dump(
-            #         [
-            #             mse_total / evalpoints_total,
-            #             mae_total / evalpoints_total,
-            #             CRPS,
-            #             CRPS_sum,
-            #             nmse_total / evalpoints_total,
-            #             nmae_total / evalpoints_total,
-            #             NCRPS,
-            #             NCRPS_sum,
-            #         ],
-            #         f,
-            #     )
             print("MSE:", mse_total / evalpoints_total)
             print("MAE:", mae_total / evalpoints_total)
-            # print("CRPS:", CRPS)
-            # print("CRPS_sum:", CRPS_sum)
             print("NMSE:", nmse_total / evalpoints_total)
             print("NMAE:", nmae_total / evalpoints_total)
-            # print("NCRPS:", NCRPS)
-            # print("NCRPS_sum:", NCRPS_sum)
     return nmse_total / evalpoints_total

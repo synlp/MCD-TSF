@@ -532,8 +532,8 @@ class CSDI_Forecasting(CSDI_base):
         return extracted_data, extracted_mask,extracted_feature_id, extracted_gt_mask
     
     def get_timestep_info(self, timesteps):
-        timestep_emb = self.timestep_emb(timesteps.transpose(1, 2)).transpose(1, 2)  # (B, timestep_emb_dim, L)
-        timestep_emb = timestep_emb.unsqueeze(2).expand(-1, -1, self.target_dim, -1) # (B, timestep_emb_dim, K, L)
+        timestep_emb = self.timestep_emb(timesteps.transpose(1, 2)).transpose(1, 2)
+        timestep_emb = timestep_emb.unsqueeze(2).expand(-1, -1, self.target_dim, -1) 
         return timestep_emb
     
     def get_relative_size_info(self, observed_data):
@@ -552,9 +552,9 @@ class CSDI_Forecasting(CSDI_base):
                                      truncation=True,
                                      return_tensors='pt',
                                      ).to(self.device)
-        context = self.text_encoder(**token_input).last_hidden_state # (B, context_L, context_dim)
+        context = self.text_encoder(**token_input).last_hidden_state
         context = context * text_mask.unsqueeze(1).unsqueeze(1)
-        context = context.permute(0, 2, 1) # (B, context_dim, context_L)
+        context = context.permute(0, 2, 1) 
         if self.save_token:
             tokens_str = self.tokenizer.batch_decode(token_input['input_ids'])
             return context, tokens_str
@@ -564,22 +564,22 @@ class CSDI_Forecasting(CSDI_base):
     def get_side_info(self, observed_tp, cond_mask, feature_id=None, timesteps=None, texts=None):
         B, K, L = cond_mask.shape
 
-        time_embed = self.time_embedding(observed_tp, self.emb_time_dim)  # (B, L, time_emb)
-        time_embed = time_embed.unsqueeze(2).expand(-1, -1, self.target_dim, -1) # (B, L, K, time_emb)
+        time_embed = self.time_embedding(observed_tp, self.emb_time_dim) 
+        time_embed = time_embed.unsqueeze(2).expand(-1, -1, self.target_dim, -1) 
 
         if self.target_dim == self.target_dim_base:
             feature_embed = self.embed_layer(
                 torch.arange(self.target_dim).to(self.device)
-            )  # (K, emb)
-            feature_embed = feature_embed.unsqueeze(0).unsqueeze(0).expand(B, L, -1, -1) # (B, L, K, feature_emb)
-        else: # if features have been sampled from all features
+            ) 
+            feature_embed = feature_embed.unsqueeze(0).unsqueeze(0).expand(B, L, -1, -1)
+        else: 
             feature_embed = self.embed_layer(feature_id).unsqueeze(1).expand(-1,L,-1,-1) 
 
-        side_info = torch.cat([time_embed, feature_embed], dim=-1)  # (B,L,K,time_emb+feature_emb)
+        side_info = torch.cat([time_embed, feature_embed], dim=-1) 
         side_info = side_info.permute(0, 3, 2, 1) 
 
         if self.is_unconditional == False:
-            side_mask = cond_mask.unsqueeze(1)  # (B,1,K,L)
+            side_mask = cond_mask.unsqueeze(1) 
             side_info = torch.cat([side_info, side_mask], dim=1) 
     
 
@@ -587,18 +587,17 @@ class CSDI_Forecasting(CSDI_base):
 
     def forward(self, batch, is_train=1):
         (
-            observed_data, # (B, K, L)
-            observed_mask, # (B, K, L)
-            observed_tp, # (B, L)
-            gt_mask, # (B, K, L)
+            observed_data,
+            observed_mask, 
+            observed_tp,
+            gt_mask, 
             _,
             _,
-            feature_id, # (B, K)
-            timesteps, # (B, timesteps_dim, L)
-            texts, # [B, ]
-            text_mask, # (B, )
+            feature_id,
+            timesteps, 
+            texts,
+            text_mask, 
         ) = self.process_data(batch)
-        # 仅当原本的变量数大于需要的变量数时，才需要采样特征
         if is_train == 1 and (self.target_dim_base > self.num_sample_features):
             observed_data, observed_mask,feature_id,gt_mask = \
                     self.sample_features(observed_data, observed_mask,feature_id,gt_mask)
@@ -613,7 +612,7 @@ class CSDI_Forecasting(CSDI_base):
                 observed_mask, gt_mask
             )
 
-        side_info = self.get_side_info(observed_tp, cond_mask, feature_id, timesteps, texts) # (B, side_info_dim, K, L)
+        side_info = self.get_side_info(observed_tp, cond_mask, feature_id, timesteps, texts)
 
         if self.timestep_emb_cat:
             timestep_emb = self.get_timestep_info(timesteps)

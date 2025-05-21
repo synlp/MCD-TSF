@@ -10,9 +10,8 @@ import random
 from main_model import CSDI_Forecasting
 from dataset_forecasting import get_dataloader
 from utils.utils import train, evaluate
-from utils.net_init import init_weights
 
-parser = argparse.ArgumentParser(description="CSDI")
+parser = argparse.ArgumentParser(description="MCD-TSF")
 parser.add_argument("--config", type=str, default="economy_36_18.yaml")
 parser.add_argument("--datatype", type=str, default="multimodal")
 parser.add_argument('--device', default='cuda:0', help='Device for Attack')
@@ -122,9 +121,6 @@ train_loader, valid_loader, test_loader, scaler, mean_scaler = get_dataloader(
 )
 
 model = CSDI_Forecasting(config, args.device, target_dim, window_lens=[args.seq_len, args.pred_len]).to(args.device)
-
-if args.init != 'None':
-    init_weights(model, args.init)
 
 if args.modelfolder == "":
     train(

@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from utils.timefeatures import time_features
 import warnings
-from utils.prepare4llm import get_prompt
+from utils.prepare4llm import get_desc
 
 warnings.filterwarnings('ignore')
 
@@ -51,7 +51,7 @@ class Dataset_Custom(Dataset):
         self.scaler_type = scaler_type
         self.__read_data__()
         self.domain = data_path.split('/')[0]
-        self.prompt = get_prompt(self.domain, self.seq_len, self.pred_len)
+        self.desc = get_desc(self.domain, self.seq_len, self.pred_len)
         self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
         
 
@@ -117,7 +117,7 @@ class Dataset_Custom(Dataset):
             return row['start_date'].strftime("%Y-%m-%d") + " to " + row['end_date'].strftime("%Y-%m-%d") + ": " + row['fact']
         if not report.empty:
             report = report.apply(add_datemark, axis=1).to_list()
-            report.insert(0, self.prompt)
+            report.insert(0, self.desc)
             text_mark = 1
         else:
             report = ['NA']

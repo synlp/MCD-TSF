@@ -3,8 +3,8 @@
 
 train:
   epochs: 250
-  batch_size: 16
-  lr: 1.0e-3
+  batch_size: 8
+  lr: 1.0e-2
   itr_per_epoch: 1.0e+8
 
 diffusion:
@@ -13,13 +13,13 @@ diffusion:
   nheads: 8
   diffusion_embedding_dim: 128
   beta_start: 0.0001
-  beta_end: 0.6
-  num_steps: 25
+  beta_end: 0.5
+  num_steps: 100
   schedule: "quad"
   is_linear: False
   noise_esti: False
   cfg: True
-  c_mask_prob: 0.05
+  c_mask_prob: 0.3
   ddim: False
   sample_steps: 75
   sample_method: "quad"

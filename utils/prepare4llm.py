@@ -3,7 +3,7 @@ from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GP
 import transformers
 
 
-def get_prompt(domain, lookback_len, pred_len):
+def get_desc(domain, lookback_len, pred_len):
     
     description = {
         "Agriculture": ["Retail Broiler Composite", "month"],
@@ -19,14 +19,14 @@ def get_prompt(domain, lookback_len, pred_len):
 
     [OT, freq] = description[domain]
 
-    prompt = (f"Below is historical reporting information over the past {lookback_len} {freq}s concerning the {OT}. " 
+    desc = (f"Below is historical reporting information over the past {lookback_len} {freq}s concerning the {OT}. " 
         f"Based on these reports, predict the potential trends and anomalies of the {OT} for the next {pred_len} {freq}s.")
-    return prompt
+    return desc
 
 def get_llm(llm_model:str, llm_layers:int=0):
     if llm_model == 'llama':
         # llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
-        llama_config = LlamaConfig.from_pretrained('../llms/llama-7b')
+        llama_config = LlamaConfig.from_pretrained('huggyllama/llama-7b')
         if llm_layers:
             llama_config.num_hidden_layers = llm_layers
         llama_config.output_attentions = True
@@ -34,7 +34,7 @@ def get_llm(llm_model:str, llm_layers:int=0):
         try:
             llm_model = LlamaModel.from_pretrained(
                 # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
-                '../llms/llama-7b',
+                'huggyllama/llama-7b',
                 local_files_only=True,
                 config=llama_config,
                 # load_in_4bit=True
@@ -51,7 +51,7 @@ def get_llm(llm_model:str, llm_layers:int=0):
         try:
             tokenizer = LlamaTokenizer.from_pretrained(
                 # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
-                '../llms/llama-7b',
+                'huggyllama/llama-7b',
                 local_files_only=True
             )
         except EnvironmentError:  # downloads the tokenizer from HF if not already done
@@ -69,7 +69,7 @@ def get_llm(llm_model:str, llm_layers:int=0):
         gpt2_config.output_hidden_states = True
         try:
             llm_model = GPT2Model.from_pretrained(
-                '../llms/gpt2',
+                'openai-community/gpt2',
                 local_files_only=True,
                 config=gpt2_config,
             )
@@ -83,7 +83,7 @@ def get_llm(llm_model:str, llm_layers:int=0):
 
         try:
             tokenizer = GPT2Tokenizer.from_pretrained(
-                '../llms/gpt2',
+                'openai-community/gpt2',
                 local_files_only=True
             )
         except EnvironmentError:  # downloads the tokenizer from HF if not already done
@@ -93,14 +93,14 @@ def get_llm(llm_model:str, llm_layers:int=0):
                 local_files_only=False
             )
     elif llm_model == 'bert':
-        bert_config = BertConfig.from_pretrained('../llms/bert-base-uncased')
+        bert_config = BertConfig.from_pretrained('google-bert/bert-base-uncased')
         if llm_layers:
             bert_config.num_hidden_layers = llm_layers
         bert_config.output_attentions = True
         bert_config.output_hidden_states = True
         try:
             llm_model = BertModel.from_pretrained(
-                '../llms/bert-base-uncased',
+                'google-bert/bert-base-uncased',
                 local_files_only=True,
                 config=bert_config,
             )
@@ -114,7 +114,7 @@ def get_llm(llm_model:str, llm_layers:int=0):
 
         try:
             tokenizer = BertTokenizer.from_pretrained(
-                '../llms/bert-base-uncased',
+                'google-bert/bert-base-uncased',
                 local_files_only=True
             )
         except EnvironmentError:  # downloads the tokenizer from HF if not already done

@@ -154,12 +154,6 @@ class ResidualBlock(nn.Module):
         return y
 
     def forward(self, x, cond_info, diffusion_emb, timesteps_emb=None, context=None):
-        """
-        x: (B, channels, K, L)
-        cond_info: (B, feature_emb+1, K, L)
-        diffusion_emb: (B, diffusion_embedding_dim)
-        context: (B, context_dim, context_L)
-        """
         B, channel, K, L = x.shape
         base_shape = x.shape
         x = x.reshape(B, channel, K * L)
