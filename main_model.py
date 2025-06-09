@@ -341,7 +341,8 @@ class CSDI_base(nn.Module):
             for t in range(self.sample_steps - 1, -1, -1):
                 if self.is_unconditional == True:
                     diff_input = cond_mask * noisy_cond_history[t] + (1.0 - cond_mask) * current_sample
-                    diff_input = diff_input.unsqueeze(1)  
+                    diff_input = diff_input.unsqueeze(1) 
+                else:
                     if self.decomp:
                         cond_obs = cond_mask * observed_data
                         noisy_target = ((1 - cond_mask) * current_sample).unsqueeze(1) # (B, 1, K, L)
