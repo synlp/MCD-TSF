@@ -204,18 +204,18 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
             all_observed_point = torch.cat(all_observed_point, dim=0)
             all_observed_time = torch.cat(all_observed_time, dim=0)
             all_generated_samples = torch.cat(all_generated_samples, dim=0)
-            if save_attn:
-                all_tt_attns = torch.cat(all_tt_attns, dim=0)
-                all_tf_attns = torch.cat(all_tf_attns, dim=0)
+            # if save_attn:
+            #     all_tt_attns = torch.cat(all_tt_attns, dim=0)
+            #     all_tf_attns = torch.cat(all_tf_attns, dim=0)
 
 
-            np.save(foldername + "/generated_nsample" + str(nsample) + "_guide" + str(guide_w) + ".npy", all_generated_samples.cpu().numpy())
-            np.save(foldername + "/target_" + str(nsample) + "_guide" + str(guide_w) + ".npy", all_target.cpu().numpy())
-            if save_attn:
-                np.save(foldername + "/all_tt_attns" + ".npy", all_tt_attns.cpu().numpy())
-                np.save(foldername + "/all_tf_attns" + ".npy", all_tf_attns.cpu().numpy())
-            if save_token:
-                np.save(foldername + "/tokens" + ".npy", np.asarray(all_tokens))
+            # np.save(foldername + "/generated_nsample" + str(nsample) + "_guide" + str(guide_w) + ".npy", all_generated_samples.cpu().numpy())
+            # np.save(foldername + "/target_" + str(nsample) + "_guide" + str(guide_w) + ".npy", all_target.cpu().numpy())
+            # if save_attn:
+            #     np.save(foldername + "/all_tt_attns" + ".npy", all_tt_attns.cpu().numpy())
+            #     np.save(foldername + "/all_tf_attns" + ".npy", all_tf_attns.cpu().numpy())
+            # if save_token:
+            #     np.save(foldername + "/tokens" + ".npy", np.asarray(all_tokens))
 
             results = {
                 "guide_w": guide_w,
@@ -224,8 +224,6 @@ def evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
             }
             with open(foldername + "config_results.json", "a") as f:
                 json.dump(results, f, indent=4)
-            print("MSE:", mse_total / evalpoints_total)
-            print("MAE:", mae_total / evalpoints_total)
-            print("NMSE:", nmse_total / evalpoints_total)
-            print("NMAE:", nmae_total / evalpoints_total)
+            print("MSE:", nmse_total / evalpoints_total)
+            print("MAE:", nmae_total / evalpoints_total)
     return nmse_total / evalpoints_total
