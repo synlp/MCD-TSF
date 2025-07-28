@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from linear_attention_transformer import LinearAttentionTransformer
-from SelfAttention_Family import FullAttention, TV_AttentionLayer, TV_AttentionEncoderLayer, AttentionLayer, AttentionEncoderLayer
+from utils.SelfAttention_Family import FullAttention, TV_AttentionLayer, TV_AttentionEncoderLayer, AttentionLayer, AttentionEncoderLayer
 
 def get_torch_trans(heads=8, layers=1, channels=64):
     encoder_layer = nn.TransformerEncoderLayer(
