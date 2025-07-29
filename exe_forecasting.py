@@ -107,7 +107,7 @@ args.batch_size = config["train"]["batch_size"]
 print(json.dumps(config, indent=4))
 
 current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-foldername = "./save/forecasting_" + args.datatype + '_' + current_time + "/"
+foldername = "./save/forecasting_" + args.data_path.split('/')[0] + '_' + current_time + "/"
 print('model folder:', foldername)
 os.makedirs(foldername, exist_ok=True)
 with open(foldername + "config_results.json", "w") as f:
@@ -149,10 +149,6 @@ if config["diffusion"]["cfg"]:
             save_attn=args.save_attn,
             save_token=args.save_token
         )
-        if mse < best_mse:
-            best_mse = mse
-        else:
-            break
 else:
     evaluate(
             model,

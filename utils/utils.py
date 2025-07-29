@@ -14,7 +14,7 @@ def train(
     valid_epoch_interval=10,
     foldername="",
 ):
-    optimizer = Adam(model.parameters(), lr=config["lr"], weight_decay=1e-6)
+    optimizer = Adam(model.parameters(), lr=float(config["lr"]), weight_decay=1e-6)
     if foldername != "":
         output_path = foldername + "/model.pth"
 
